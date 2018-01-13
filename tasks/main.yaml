@@ -1,0 +1,140 @@
+---
+
+- name: create apps dir
+  file: path={{item}} state=directory mode=0755
+  with_items:
+   - /root/apps
+   - /root/backups
+   - /root/bin
+   - /root/scripts
+   - /root/temp
+- name: stat file
+  stat:
+   path: /root/anaconda-ks.cfg
+  register: ana
+- name: move file
+  command: mv /root/anaconda-ks.cfg /root/temp
+  when: ana.stat.exists
+- name: Set hostname
+  hostname:
+          name: '{{hostname}}.{{domain}}'
+- name: install tools
+  yum: pkg={{item}} state=installed
+  with_items:
+    - epel-release
+    - wget
+    - telnet
+    - screen
+    - deltarpm
+    - net-tools
+    - lsof
+    - bash-completion
+    - vim
+    - bind-utils
+    - screen
+    - chrony
+    - dnsmasq
+  ignore_errors: yes
+- name: Set Timezone
+  timezone:
+          name: '{{timezone}}'
+- name: Start chronyd
+  systemd:
+          name: chronyd.service
+          state: started
+          enabled: true
+- name: Disable SElinux
+  selinux:
+          state: disabled
+- name: Create bandwidth
+  file:
+          path: /root/bin/bandwidth
+          state: touch
+          mode: 0755
+- name: Add bandwidth
+  lineinfile:
+         dest: /root/bin/bandwidth
+         line: 'nload -u K -U K {{ ansible_default_ipv4.interface }}'
+- name: Set Screen scrolling
+  lineinfile:
+          dest: /etc/screenrc
+          line: 'termcapinfo xterm* ti@:te@'
+- name: Stop unwanted services
+  systemd: name={{item}} state=stopped enabled=no
+  with_items:
+          - httpd.service
+          - abrt-ccpp.service
+          - abrt-oops.service
+          - abrt-vmcore.service
+          - abrt-xorg.service
+          - abrtd.service
+          - dmraid-activation.service
+          - hypervkvpd.service
+          - hypervvssd.service
+          - iscsi.service
+          - kdump.service
+          - mdmonitor.service
+          - multipathd.service
+          - nfs-lock.service
+          - postfix.service
+          - rpcbind.service
+          - smartd.service
+  ignore_errors: yes
+- name: Add DNSmasq values
+  template:
+          src: templates/local.conf.j2
+          dest: /etc/dnsmasq.d/local.conf
+  notify:
+           - restart dnsmasq
+- name: Modify sshd
+  lineinfile: dest=/etc/ssh/sshd_config line="{{item}}"
+  with_items:
+          - 'GSSAPIAuthentication no'
+          - 'UseDNS no'
+  notify:
+          - restart sshd
+- name: Comment logging
+  template:
+          src: templates/z-command_log.sh.j2
+          dest: /etc/profile.d/z-command_log.sh
+- template: 
+          src: templates/command_log.conf.j2
+          dest: /etc/rsyslog.d/command_log.conf
+- systemd:
+          name: rsyslog
+          state: restarted
+          enabled: True
+- name: Enable comment logging for sftp
+  lineinfile:
+          dest: /etc/ssh/sshd_config
+          regexp: '^Subsystem'
+          line: 'Subsystem       sftp    /usr/libexec/openssh/sftp-server -l INFO -f LOCAL6'
+- file:
+        path: /var/log/command.log
+        state: touch
+        mode: 0600
+- command: chattr +a /var/log/command.log
+- name: Diable Rsyslog ratelimit
+  template:
+          src: templates/disable_ratelimiting.conf.j2
+          dest: /etc/rsyslog.d/disable_ratelimiting.conf
+- name: Edit bashrc
+  lineinfile: dest=/root/.bashrc line={{item}}
+  with_items:
+          - "alias reboot=\'echo \"Rebooting `hostname` in 5 secs. Press Ctrl+C to cancel\";sleep 7 && reboot\'"
+          - "alias poweroff=\'echo \"Shutting down `hostname` in 5 secs. Press Ctrl+C to cancel\";sleep 7 && poweroff\'"
+- name: Type red
+  lineinfile:
+        dest: /root/.bashrc
+        line: "export PS1=\"[\\u@\\[\\e[1;31m\\]{{hostname}}\\[\\e[0;31m\\]-{{role}}\\[\\e[0m\\] \\W]\\\\$ \""
+  when: color == "red"
+- name: Type blue
+  lineinfile:
+        dest: /root/.bashrc
+        line: "export PS1=\"[\\u@\\[\\e[1;34m\\]{{hostname}}\\[\\e[0;34m\\]-{{role}}\\[\\e[0m\\] \\W]\\\\$ \""
+  when: color == "blue"
+- name: Type green
+  lineinfile:
+        dest: /root/.bashrc
+        line: "export PS1=\"[\\u@\\[\\e[1;32m\\]{{hostname}}\\[\\e[0;32m\\]-{{role}}\\[\\e[0m\\] \\W]\\\\$ \""
+  when: color == "green"

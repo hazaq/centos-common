@@ -1,0 +1,13 @@
+---
+
+- name: restart dnsmasq
+  systemd:
+          name: dnsmasq
+          state: restarted
+          enabled: True
+
+- name: restart sshd
+  systemd:
+          name: sshd
+          state: restarted
+          enabled: True
