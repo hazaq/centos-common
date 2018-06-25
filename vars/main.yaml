@@ -4,4 +4,4 @@ hostname: localhost
 domain: localdomain
 timezone: 'Asia/Dubai'
 color: green
-role: zimbra
+role: email
