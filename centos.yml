@@ -1,0 +1,7 @@
+- name: centos-Common
+  hosts: all
+  become: yes
+  become_method: sudo
+  connection: ssh
+  roles:
+    - common
